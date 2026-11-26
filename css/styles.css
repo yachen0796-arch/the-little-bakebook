@@ -665,10 +665,38 @@ textarea::placeholder {
   background: var(--paper);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  margin-bottom: 18px;
 }
 
 .backup-card h3 {
   margin: 18px 0 8px;
+}
+
+.backup-card code {
+  color: var(--brown-dark);
+  background: var(--rose-light);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.backup-card progress {
+  display: block;
+  width: 100%;
+  height: 12px;
+  margin: 8px 0 14px;
+  accent-color: var(--rose);
+}
+
+.backup-failures {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 12px 12px 12px 30px;
+  border-radius: 10px;
+  background: #fff3f0;
+  color: #963f37;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 /* Messages */
@@ -799,6 +827,10 @@ textarea::placeholder {
 
   .photo-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .backup-card {
+    padding: 24px 18px;
   }
 }
 

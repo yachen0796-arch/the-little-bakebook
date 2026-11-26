@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="css/styles.css">
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="js/config.js" defer></script>
   <script src="js/app.js" defer></script>
 </head>
@@ -163,8 +164,19 @@
           <span class="stat-icon" aria-hidden="true">↓</span>
           <h3>Export your baking journal</h3>
           <p>Download your recipes, reviews and photo information as a JSON backup file.</p>
-          <button class="primary-button" id="export-backup" type="button">Download backup</button>
+          <button class="primary-button" id="export-backup" type="button">Download JSON backup</button>
           <p class="muted small">This backup contains photo information, not the actual image files.</p>
+        </div>
+
+        <div class="backup-card full-backup-card">
+          <span class="stat-icon" aria-hidden="true">✿</span>
+          <h3>Download a full backup</h3>
+          <p>Get a ZIP with <code>backup.json</code> and the original photo files in a <code>photos</code> folder. Photos are downloaded securely using your signed-in account.</p>
+          <button class="primary-button" id="export-full-backup" type="button">Download full ZIP backup</button>
+          <p id="full-backup-progress-text" class="muted small" role="status" aria-live="polite"></p>
+          <progress id="full-backup-progress" class="hidden" max="100" value="0" aria-label="Full backup progress"></progress>
+          <ul id="full-backup-failures" class="backup-failures hidden" aria-live="polite"></ul>
+          <p class="muted small">For large photo collections, keep this page open until the ZIP finishes preparing and downloads.</p>
         </div>
       </section>
     </main>

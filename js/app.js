@@ -733,8 +733,21 @@ async function deleteRecipe(recipe) {
 }
 
 // -----------------------------------------------------
-// Export a personal JSON backup (no database changes)
+// Export personal JSON and full ZIP backups (read-only)
 // -----------------------------------------------------
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Delay revocation so mobile browsers can begin reading the generated file.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 $("export-backup").addEventListener("click", () => {
   const backup = {
@@ -744,14 +757,106 @@ $("export-backup").addEventListener("click", () => {
     photos
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `little-bakebook-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `little-bakebook-backup-${new Date().toISOString().slice(0, 10)}.json`);
+});
+
+function setFullBackupProgress(message, value, total) {
+  const progress = $("full-backup-progress");
+  const text = $("full-backup-progress-text");
+  progress.classList.remove("hidden");
+  progress.value = total ? Math.round((value / total) * 100) : 0;
+  text.textContent = message;
+}
+
+function getArchivePhotoName(photo, index) {
+  const lastPathPart = String(photo.storage_path || "photo").split("/").pop() || "photo";
+  const safeName = lastPathPart.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `photos/${String(index + 1).padStart(4, "0")}-${safeName}`;
+}
+
+$("export-full-backup").addEventListener("click", async () => {
+  const button = $("export-full-backup");
+  const progress = $("full-backup-progress");
+  const failuresList = $("full-backup-failures");
+
+  if (!currentUser) {
+    showMessage("Please sign in before creating a backup.", "error");
+    return;
+  }
+  if (!window.JSZip) {
+    showMessage("The ZIP library could not be loaded. Check your connection and try again.", "error");
+    return;
+  }
+
+  setButtonLoading(button, true, "Preparing ZIP...");
+  failuresList.replaceChildren();
+  failuresList.classList.add("hidden");
+  progress.classList.remove("hidden");
+  progress.value = 0;
+
+  try {
+    const zip = new window.JSZip();
+    const failures = [];
+    const photoRecords = [];
+
+    for (let index = 0; index < photos.length; index += 1) {
+      const photo = photos[index];
+      const archivePath = getArchivePhotoName(photo, index);
+      setFullBackupProgress(`Downloading photo ${index + 1} of ${photos.length}…`, index, photos.length);
+
+      try {
+        if (!photo.storage_path) throw new Error("Photo record has no storage path.");
+        // Storage SDK attaches the active Supabase session; no public URL or service key is used.
+        const { data, error } = await supabaseClient.storage.from(BUCKET).download(photo.storage_path);
+        if (error) throw error;
+        if (!data) throw new Error("Storage returned an empty file.");
+        zip.file(archivePath, data, { binary: true });
+        photoRecords.push({ ...photo, backup_file: archivePath });
+      } catch (error) {
+        const failure = {
+          photo_id: photo.id ?? null,
+          storage_path: photo.storage_path ?? null,
+          error: error?.message || "Download failed."
+        };
+        failures.push(failure);
+        photoRecords.push({ ...photo, backup_file: null });
+      }
+    }
+
+    const backup = {
+      exported_at: new Date().toISOString(),
+      recipes,
+      reviews,
+      photos: photoRecords,
+      photo_download_failures: failures
+    };
+    zip.file("backup.json", JSON.stringify(backup, null, 2));
+
+    setFullBackupProgress("Packaging ZIP for download…", 0, 1);
+    const blob = await zip.generateAsync(
+      { type: "blob", mimeType: "application/zip", compression: "STORE" },
+      metadata => setFullBackupProgress(`Packaging ZIP… ${Math.round(metadata.percent)}%`, metadata.percent, 100)
+    );
+    downloadBlob(blob, `little-bakebook-full-backup-${new Date().toISOString().slice(0, 10)}.zip`);
+
+    progress.value = 100;
+    if (failures.length) {
+      failuresList.innerHTML = failures.map(failure =>
+        `<li>Photo ${escapeHTML(failure.photo_id ?? "(unknown)")} (${escapeHTML(failure.storage_path || "no path")}): ${escapeHTML(failure.error)}</li>`
+      ).join("");
+      failuresList.classList.remove("hidden");
+      $("full-backup-progress-text").textContent = `ZIP downloaded with ${failures.length} photo download failure${failures.length === 1 ? "" : "s"}. See the list below; failures are also recorded in backup.json.`;
+      showMessage("Full backup downloaded, but some photos could not be included.", "error");
+    } else {
+      $("full-backup-progress-text").textContent = `Full backup downloaded successfully (${photos.length} photo${photos.length === 1 ? "" : "s"}).`;
+      showMessage("Full backup downloaded successfully.", "success");
+    }
+  } catch (error) {
+    $("full-backup-progress-text").textContent = `Backup failed: ${error?.message || "Unknown error."}`;
+    showMessage("Could not create full backup: " + (error?.message || "Unknown error."), "error");
+  } finally {
+    setButtonLoading(button, false);
+  }
 });
 
 initialise();
